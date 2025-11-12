@@ -19,7 +19,7 @@ python tp1_2.py
 
 En cuanto a si conviene usar histogramas como atributos para clasificar imágenes, sí es posible, pero hay que considerar que un histograma descarta la información espacial. Esto implica que dos imágenes pueden compartir exactamente el mismo histograma y, aun así, tener contenidos totalmente distintos, como muestra la Figura 1.
 
-![Comparación de histogramas](results/histogramas_tp1.png)
+![Comparación de histogramas](results/histogramas.png)
 
 Por ese motivo, no lo sugeriría para tareas de clasificación. Hay enfoques que preservan mejor la estructura espacial, como la convolución con filtros, capaces de capturar rasgos locales y patrones, algo fundamental para este tipo de problemas.
 
