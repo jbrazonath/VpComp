@@ -4,12 +4,12 @@ import numpy as np
 from pathlib import Path
 
 def white_patch(img: np.ndarray):
-    # Convertir a float para los calculos 
+    # Convert to float for calculations
     img_float = img.astype(np.float32)
     max_channel_value = np.max(img_float, axis=(0, 1))
     cantidad_de_desviaciones = 1.5
     correction_factors = np.ones(3, dtype=np.float32)
-    # Se checkean los valores extremos y se usa una estrategia para corregirlos
+    # Check extreme values and apply a correction strategy
     for i in range(len(max_channel_value)):
         if max_channel_value[i] < 1:
             correction_factors[i] = 255 / (np.mean(
@@ -18,10 +18,10 @@ def white_patch(img: np.ndarray):
             correction_factors[i] = 255 / (np.mean(
                 img_float[:, :, i]) + cantidad_de_desviaciones*np.std(img_float[:, :, i]))
         else:
-            # Factores por canal
+            # Per-channel factors
             correction_factors[i] = 255.0 / \
                 np.clip(max_channel_value[i], 1, 254)
-    # Correccion
+    # Correction
     corrected_img = img_float * correction_factors
     corrected_img = np.clip(corrected_img, 0, 255).astype(np.uint8)
 
@@ -30,29 +30,29 @@ def white_patch(img: np.ndarray):
 
 def white_patch_intelligent(img: np.ndarray, method='percentile', percentile=99.5, edge_threshold=0.1):
     """
-    White patch algorithm más inteligente con diferentes estrategias
+    Smarter White Patch algorithm with different strategies
         
-        img: Imagen BGR
+        img: BGR image
         method: 'percentile', 'edge_based', 'iterative', 'robust_max'
-        percentile: Para método percentile (95-99.5)
-        edge_threshold: Umbral para detección de bordes
+        percentile: For percentile method (95–99.5)
+        edge_threshold: Threshold for edge detection
     """
     img_float = img.astype(np.float32)
 
     if method == 'percentile':
-        # Usar percentiles altos en lugar del máximo absoluto
+        # Use high percentiles instead of the absolute maximum
         reference_values = np.percentile(img_float, percentile, axis=(0, 1))
 
     elif method == 'edge_based':
-        # Encontrar píxeles con bordes fuertes (más probabilidad de ser superficies blancas)
+        # Find pixels with strong edges (more likely to be white surfaces)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray, 50, 150)
 
-        # Dilatar bordes para incluir píxeles cercanos
+        # Dilate edges to include nearby pixels
         kernel = np.ones((3, 3), np.uint8)
         edges_dilated = cv2.dilate(edges, kernel, iterations=1)
 
-        # Usar solo píxeles cerca de bordes para calcular referencia
+        # Use only pixels near edges to compute the reference
         reference_values = []
         for i in range(3):
             channel_values = img_float[:, :, i][edges_dilated > 0]
@@ -63,21 +63,21 @@ def white_patch_intelligent(img: np.ndarray, method='percentile', percentile=99.
         reference_values = np.array(reference_values)
 
     elif method == 'iterative':
-        # Algoritmo iterativo: excluir píxeles ya saturados
+        # Iterative algorithm: exclude already saturated pixels
         reference_values = np.zeros(3)
         for i in range(3):
             channel = img_float[:, :, i].copy()
 
-            # Verificar si el canal tiene píxeles saturados
+            # Check whether the channel has saturated pixels
             saturated_pixels = channel[channel > 240]
 
             if len(saturated_pixels) == 0:
-                # Canal sin píxeles saturados: usar el máximo directamente
+                # Channel without saturated pixels: use the maximum directly
                 reference_values[i] = np.max(channel)
             else:
-                # Canal con píxeles saturados: aplicar método iterativo
+                # Channel with saturated pixels: apply iterative method
                 for iteration in range(3):
-                    # Excluir píxeles ya saturados (> 240)
+                    # Exclude already saturated pixels (> 240)
                     valid_pixels = channel[channel < 240]
                     if len(valid_pixels) > 0:
                         threshold = np.percentile(valid_pixels, 98)
@@ -88,29 +88,29 @@ def white_patch_intelligent(img: np.ndarray, method='percentile', percentile=99.
                     channel) if len(channel) > 0 else 255
 
     elif method == 'robust_max':
-        # Usar media + desviaciones pero de forma más robusta
+        # Use mean + standard deviations in a more robust way
         reference_values = []
         for i in range(3):
             channel = img_float[:, :, i]
             mean_val = np.mean(channel)
             std_val = np.std(channel)
 
-            # Usar diferentes estrategias según la distribución
-            if std_val < 10:  # Imagen muy uniforme
+            # Use different strategies depending on the distribution
+            if std_val < 10:  # Very uniform image
                 reference_values.append(np.percentile(channel, 99))
-            elif std_val > 50:  # Imagen con mucho contraste
+            elif std_val > 50:  # High-contrast image
                 reference_values.append(mean_val + 2.0 * std_val)
-            else:  # Caso normal
+            else:  # Normal case
                 reference_values.append(mean_val + 1.5 * std_val)
         reference_values = np.array(reference_values)
 
-    # Evitar valores extremos
+    # Avoid extreme values
     reference_values = np.clip(reference_values, 1, 254)
 
-    # Calcular factores de corrección
+    # Compute correction factors
     correction_factors = 255.0 / reference_values
 
-    # Aplicar corrección con límites suaves
+    # Apply correction with soft limits
     corrected_img = img_float * correction_factors
     corrected_img = np.clip(corrected_img, 0, 255).astype(np.uint8)
 
@@ -119,24 +119,24 @@ def white_patch_intelligent(img: np.ndarray, method='percentile', percentile=99.
 
 def white_patch_adaptive(img: np.ndarray):
     """
-    Versión adaptativa que elige automáticamente el mejor método
+    Adaptive version that automatically chooses the best method
     """
     img_float = img.astype(np.float32)
 
-    # Analizar características de la imagen
+    # Analyze image characteristics
     mean_brightness = np.mean(img_float)
     std_brightness = np.std(img_float)
 
-    # Detectar si hay píxeles saturados
+    # Detect whether there are saturated pixels
     saturated_pixels = np.sum(img_float > 250) / img_float.size
 
-    if saturated_pixels > 0.01:  # Más del 1% saturado
+    if saturated_pixels > 0.01:  # More than 1% saturated
         method = 'iterative'
-    elif std_brightness < 20:  # Imagen muy uniforme
+    elif std_brightness < 20:  # Very uniform image
         method = 'percentile'
-    elif mean_brightness < 80:  # Imagen oscura
+    elif mean_brightness < 80:  # Dark image
         method = 'robust_max'
-    else:  # Caso general
+    else:  # General case
         method = 'edge_based'
 
     return white_patch_intelligent(img, method=method)
@@ -169,7 +169,7 @@ for img_path in image_paths:
 
     plt.tight_layout()
 
-    # Guardar la figura en la carpeta results
+    # Save the figure in the results folder
     result_filename = RESULTS_FOLDER / f"{img_path.stem}_comparison.png"
     plt.savefig(result_filename, dpi=300, bbox_inches='tight')
     # plt.show()
